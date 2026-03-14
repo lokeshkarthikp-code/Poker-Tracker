@@ -40,7 +40,7 @@ if "players" not in st.session_state:
 # ---------- LAYOUT ----------
 left, right = st.columns([1,2])
 
-# ---------- LEFT SIDE CONTROLS ----------
+# ---------- LEFT: CONTROLS ----------
 with left:
 
     st.header("Players")
@@ -76,8 +76,10 @@ with left:
             st.session_state.players[p]["buyins"].append(2000)
 
         for i, b in enumerate(st.session_state.players[p]["buyins"]):
+
             c1, c2 = st.columns([4,1])
             c1.write(f"₹{b}")
+
             if c2.button("❌", key=f"del_{p}_{i}"):
                 st.session_state.players[p]["buyins"].pop(i)
                 st.rerun()
@@ -91,6 +93,7 @@ with left:
             step=100,
             key=f"chips_{p}"
         )
+
         st.session_state.players[p]["chips"] = chips
 
         st.divider()
@@ -148,7 +151,7 @@ with left:
             else:
                 winners[j][1] = amount_winner
 
-# ---------- RIGHT SIDE TABLE ----------
+# ---------- RIGHT: TABLE ----------
 with right:
 
     st.header("Table")
@@ -156,16 +159,16 @@ with right:
     players = list(st.session_state.players.keys())
 
     seat_positions = [
-        ("50%","-5%"),
-        ("85%","15%"),
-        ("92%","45%"),
-        ("85%","75%"),
-        ("50%","90%"),
-        ("15%","75%"),
-        ("8%","45%"),
-        ("15%","15%"),
-        ("50%","45%")
-]
+        (260, -10),
+        (480, 40),
+        (510, 150),
+        (480, 260),
+        (260, 300),
+        (40, 260),
+        (10, 150),
+        (40, 40),
+        (260, 150)
+    ]
 
     html = """
 <html>
@@ -188,7 +191,7 @@ overflow-x:auto;
 .poker-table{
 position:relative;
 width:100%;
-max-width:600px;
+max-width:500px;
 aspect-ratio:600/350;
 background:radial-gradient(circle at center,#147a3d 0%,#0b3b1c 70%,#021107 100%);
 border:6px solid #d4af37;
@@ -198,8 +201,8 @@ box-shadow:0 0 30px rgba(0,0,0,0.9);
 
 .poker-seat{
 position:absolute;
-width:90px;
-height:90px;
+width:70px;
+height:70px;
 border-radius:50%;
 background:#111111;
 border:2px solid #d4af37;
@@ -208,23 +211,7 @@ display:flex;
 align-items:center;
 justify-content:center;
 text-align:center;
-font-size:12px;
-}
-
-/* MOBILE OPTIMIZATION */
-
-@media (max-width:700px){
-
-.poker-seat{
-width:55px;
-height:55px;
-font-size:9px;
-}
-
-.poker-table{
-max-width:95vw;
-}
-
+font-size:10px;
 }
 
 </style>
@@ -246,7 +233,7 @@ max-width:95vw;
             label = "Empty"
 
         html += f"""
-        <div class="poker-seat" style="left:{x}; top:{y}; transform: translate(-50%, -50%);"
+        <div class="poker-seat" style="left:{x}px; top:{y}px;">
             {label}
         </div>
         """
@@ -258,4 +245,4 @@ max-width:95vw;
 </html>
 """
 
-    components.html(html, height=420, scrolling=False)
+    components.html(html, height=600, scrolling=True)

@@ -156,16 +156,16 @@ with right:
     players = list(st.session_state.players.keys())
 
     seat_positions = [
-        (260, -10),
-        (480, 40),
-        (510, 150),
-        (480, 260),
-        (260, 300),
-        (40, 260),
-        (10, 150),
-        (40, 40),
-        (260, 150)
-    ]
+        ("50%","-5%"),
+        ("85%","15%"),
+        ("92%","45%"),
+        ("85%","75%"),
+        ("50%","90%"),
+        ("15%","75%"),
+        ("8%","45%"),
+        ("15%","15%"),
+        ("50%","45%")
+]
 
     html = """
 <html>
@@ -246,7 +246,7 @@ max-width:95vw;
             label = "Empty"
 
         html += f"""
-        <div class="poker-seat" style="left:{x}px; top:{y}px;">
+        <div class="poker-seat" style="left:{x}; top:{y}; transform: translate(-50%, -50%);"
             {label}
         </div>
         """

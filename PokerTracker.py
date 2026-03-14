@@ -152,6 +152,7 @@ with left:
                 winners[j][1] = amount_winner
 
 # ---------- RIGHT: TABLE ----------
+# ---------- RIGHT: TABLE VISUAL ----------
 with right:
 
     st.header("Table")
@@ -179,20 +180,26 @@ body{
 margin:0;
 padding:0;
 background:transparent;
-}
-
-.table-container{
-width:100%;
 display:flex;
 justify-content:center;
-overflow-x:auto;
+}
+
+.scale-wrapper{
+transform:scale(0.75);
+transform-origin:top center;
+}
+
+@media (max-width:600px){
+.scale-wrapper{
+transform:scale(0.55);
+}
 }
 
 .poker-table{
 position:relative;
-width:100%;
-max-width:500px;
-aspect-ratio:600/350;
+width:600px;
+height:350px;
+margin:10px auto;
 background:radial-gradient(circle at center,#147a3d 0%,#0b3b1c 70%,#021107 100%);
 border:6px solid #d4af37;
 border-radius:200px;
@@ -201,8 +208,8 @@ box-shadow:0 0 30px rgba(0,0,0,0.9);
 
 .poker-seat{
 position:absolute;
-width:70px;
-height:70px;
+width:90px;
+height:90px;
 border-radius:50%;
 background:#111111;
 border:2px solid #d4af37;
@@ -211,7 +218,7 @@ display:flex;
 align-items:center;
 justify-content:center;
 text-align:center;
-font-size:10px;
+font-size:12px;
 }
 
 </style>
@@ -219,7 +226,7 @@ font-size:10px;
 
 <body>
 
-<div class="table-container">
+<div class="scale-wrapper">
 <div class="poker-table">
 """
 
@@ -245,4 +252,4 @@ font-size:10px;
 </html>
 """
 
-    components.html(html, height=600, scrolling=True)
+    components.html(html, height=500)

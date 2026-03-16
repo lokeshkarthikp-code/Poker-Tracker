@@ -1,55 +1,71 @@
 import streamlit as st
 import streamlit.components.v1 as components
+import json
+import os
 
 st.set_page_config(layout="wide")
 
 # ---------- GLOBAL STYLE ----------
 st.markdown("""
 <style>
-.stApp {
-    background-color: #000000;
-}
+.stApp {background-color:#000000;}
+.block-container {padding-top:1rem;}
 
-.block-container {
-    padding-top: 1rem;
-}
-
-h1, h2, h3, h4, h5, h6, label, span, p {
-    color: #f5f5f5 !important;
+h1,h2,h3,h4,h5,h6,label,span,p {
+color:#f5f5f5 !important;
 }
 
 .stButton>button {
-    background-color: #147a3d;
-    color: #f5f5f5;
-    border-radius: 6px;
-    border: 1px solid #d4af37;
+background-color:#147a3d;
+color:#f5f5f5;
+border-radius:6px;
+border:1px solid #d4af37;
 }
 
 .stButton>button:hover {
-    background-color: #1c9c4f;
+background-color:#1c9c4f;
 }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("Boys Poker Sesh")
 
+# ---------- SAVE FILE ----------
+SAVE_FILE = "poker_state.json"
+
+def save_state():
+    with open(SAVE_FILE,"w") as f:
+        json.dump(st.session_state.players,f)
+
 # ---------- SESSION STATE ----------
 if "players" not in st.session_state:
+    if os.path.exists(SAVE_FILE):
+        with open(SAVE_FILE,"r") as f:
+            st.session_state.players = json.load(f)
+    else:
+        st.session_state.players = {}
+
+# ---------- RESET BUTTON ----------
+if st.button("Reset Game"):
     st.session_state.players = {}
+    if os.path.exists(SAVE_FILE):
+        os.remove(SAVE_FILE)
+    st.rerun()
 
 # ---------- LAYOUT ----------
-left, right = st.columns([1,2])
+left,right = st.columns([1,2])
 
-# ---------- LEFT: CONTROLS ----------
+# ---------- LEFT SIDE ----------
 with left:
 
     st.header("Players")
 
-    name = st.text_input("Player Name", key="name_input")
+    name = st.text_input("Player Name")
 
     if st.button("Add Player"):
         if name and name not in st.session_state.players and len(st.session_state.players) < 9:
-            st.session_state.players[name] = {"buyins": [], "chips": 0}
+            st.session_state.players[name] = {"buyins":[], "chips":0}
+            save_state()
 
     st.divider()
 
@@ -64,28 +80,33 @@ with left:
             key=f"buy_{p}"
         )
 
-        c1, c2, c3 = st.columns(3)
+        c1,c2,c3 = st.columns(3)
 
-        if c1.button("Add Custom", key=f"add_buy_{p}"):
+        if c1.button("Add Custom",key=f"custom_{p}") and buy>0:
             st.session_state.players[p]["buyins"].append(buy)
+            save_state()
 
-        if c2.button("₹1000", key=f"add1000_{p}"):
+        if c2.button("₹1000",key=f"b1000_{p}"):
             st.session_state.players[p]["buyins"].append(1000)
+            save_state()
 
-        if c3.button("₹2000", key=f"add2000_{p}"):
+        if c3.button("₹2000",key=f"b2000_{p}"):
             st.session_state.players[p]["buyins"].append(2000)
+            save_state()
 
-        for i, b in enumerate(st.session_state.players[p]["buyins"]):
+        for i,b in enumerate(st.session_state.players[p]["buyins"]):
 
-            c1, c2 = st.columns([4,1])
+            c1,c2 = st.columns([4,1])
+
             c1.write(f"₹{b}")
 
-            if c2.button("❌", key=f"del_{p}_{i}"):
+            if c2.button("❌",key=f"del_{p}_{i}"):
                 st.session_state.players[p]["buyins"].pop(i)
+                save_state()
                 st.rerun()
 
         total = sum(st.session_state.players[p]["buyins"])
-        st.write("Total:", total)
+        st.write("Total:",total)
 
         chips = st.number_input(
             f"Final Chips {p}",
@@ -100,78 +121,77 @@ with left:
 
     if st.button("Calculate Settlements"):
 
-        profits = {}
-        total_buy = 0
-        total_chips = 0
+        profits={}
+        total_buy=0
+        total_chips=0
 
-        for p, data in st.session_state.players.items():
+        for p,data in st.session_state.players.items():
 
-            buy = sum(data["buyins"])
-            chip = data["chips"]
+            buy=sum(data["buyins"])
+            chip=data["chips"]
 
-            profits[p] = chip - buy
+            profits[p]=chip-buy
 
-            total_buy += buy
-            total_chips += chip
+            total_buy+=buy
+            total_chips+=chip
 
-        imbalance = total_chips - total_buy
+        imbalance = total_chips-total_buy
 
         st.subheader("Settlements")
 
-        if imbalance != 0:
+        if imbalance!=0:
             st.write(f"Warning: Chip total and buy-ins differ by ₹{imbalance}")
 
-        winners = [[p, v] for p, v in profits.items() if v > 0]
-        losers = [[p, -v] for p, v in profits.items() if v < 0]
+        winners=[[p,v] for p,v in profits.items() if v>0]
+        losers=[[p,-v] for p,v in profits.items() if v<0]
 
-        winners.sort(key=lambda x: x[1], reverse=True)
-        losers.sort(key=lambda x: x[1], reverse=True)
+        winners.sort(key=lambda x:x[1],reverse=True)
+        losers.sort(key=lambda x:x[1],reverse=True)
 
-        i = j = 0
+        i=j=0
 
-        while i < len(losers) and j < len(winners):
+        while i<len(losers) and j<len(winners):
 
-            loser, amount_loser = losers[i]
-            winner, amount_winner = winners[j]
+            loser,amount_loser=losers[i]
+            winner,amount_winner=winners[j]
 
-            amount = min(amount_loser, amount_winner)
+            amount=min(amount_loser,amount_winner)
 
             st.write(f"{loser} pays {winner}: ₹{amount}")
 
-            amount_loser -= amount
-            amount_winner -= amount
+            amount_loser-=amount
+            amount_winner-=amount
 
-            if amount_loser == 0:
-                i += 1
+            if amount_loser==0:
+                i+=1
             else:
-                losers[i][1] = amount_loser
+                losers[i][1]=amount_loser
 
-            if amount_winner == 0:
-                j += 1
+            if amount_winner==0:
+                j+=1
             else:
-                winners[j][1] = amount_winner
+                winners[j][1]=amount_winner
 
-# ---------- RIGHT: TABLE ----------
-# ---------- RIGHT: TABLE VISUAL ----------
+# ---------- RIGHT SIDE TABLE ----------
 with right:
 
     st.header("Table")
 
-    players = list(st.session_state.players.keys())
+    players=list(st.session_state.players.keys())
 
-    seat_positions = [
-        (260, -10),
-        (480, 40),
-        (510, 150),
-        (480, 260),
-        (260, 300),
-        (40, 260),
-        (10, 150),
-        (40, 40),
-        (260, 150)
+    seat_positions=[
+        (260,-10),
+        (480,40),
+        (510,150),
+        (480,260),
+        (260,300),
+        (40,260),
+        (10,150),
+        (40,40),
+        (260,150)
     ]
 
-    html = """
+    html="""
 <html>
 <head>
 <style>
@@ -230,26 +250,26 @@ font-size:12px;
 <div class="poker-table">
 """
 
-    for i, (x, y) in enumerate(seat_positions):
+    for i,(x,y) in enumerate(seat_positions):
 
-        if i < len(players):
-            pname = players[i]
-            total = sum(st.session_state.players[pname]["buyins"])
-            label = f"{pname}<br>₹{total}"
+        if i<len(players):
+            pname=players[i]
+            total=sum(st.session_state.players[pname]["buyins"])
+            label=f"{pname}<br>₹{total}"
         else:
-            label = "Empty"
+            label="Empty"
 
-        html += f"""
+        html+=f"""
         <div class="poker-seat" style="left:{x}px; top:{y}px;">
-            {label}
+        {label}
         </div>
         """
 
-    html += """
+    html+="""
 </div>
 </div>
 </body>
 </html>
 """
 
-    components.html(html, height=500)
+    components.html(html,height=500)

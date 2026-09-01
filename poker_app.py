@@ -71,10 +71,13 @@ def _local_load():
 
 @st.cache_resource(show_spinner=False)
 def _get_worksheet():
-    """Returns the worksheet, or None if Sheets isn't configured."""
+    """Returns (worksheet, error_string). One of the two is always None."""
     try:
         import gspread
         from google.oauth2.credentials import Credentials
+
+        if "gcp_oauth" not in st.secrets:
+            return None, "No [gcp_oauth] section found in secrets."
 
         cfg = st.secrets["gcp_oauth"]
         creds = Credentials(
@@ -99,20 +102,28 @@ def _get_worksheet():
 
         if not ws.get_all_values():
             ws.append_row(SHEET_HEADERS)
-        return ws
-    except Exception:
-        return None
+        return ws, None
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"
+
+
+def _ws():
+    return _get_worksheet()[0]
+
+
+def _ws_error():
+    return _get_worksheet()[1]
 
 
 def sheets_ready():
-    return _get_worksheet() is not None
+    return _ws() is not None
 
 
 def save_session_to_sheet(session_name, players):
     """Writes one row per player. Re-saving the same session replaces
     its previous rows instead of appending duplicates.
     Returns (ok, message)."""
-    ws = _get_worksheet()
+    ws = _ws()
     if ws is None:
         return False, "Google Sheets isn't connected. See setup notes."
 
@@ -148,7 +159,7 @@ def save_session_to_sheet(session_name, players):
 
 def load_history():
     """Returns a list of dicts, one per player-session. Empty if unavailable."""
-    ws = _get_worksheet()
+    ws = _ws()
     if ws is None:
         return []
     try:
@@ -170,7 +181,7 @@ def list_sessions():
 
 def delete_session(session_id):
     """Removes every row belonging to one session. Returns (ok, message)."""
-    ws = _get_worksheet()
+    ws = _ws()
     if ws is None:
         return False, "Google Sheets isn't connected."
     try:
@@ -250,7 +261,15 @@ with st.sidebar:
     if sheets_ready():
         st.success("Sheet connected")
     else:
-        st.warning("Sheet not connected — results won't be saved")
+        st.error("Sheet not connected")
+        with st.expander("Why?"):
+            st.code(_ws_error() or "Unknown error", language=None)
+            st.caption(
+                f"Looking for a sheet named exactly: {SHEET_NAME}"
+            )
+        if st.button("Retry connection", use_container_width=True):
+            _get_worksheet.clear()
+            st.rerun()
 
     st.divider()
 

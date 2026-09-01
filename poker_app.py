@@ -109,12 +109,14 @@ def sheets_ready():
 
 
 def save_session_to_sheet(session_name, players):
-    """Appends one row per player. Returns (ok, message)."""
+    """Writes one row per player. Re-saving the same session replaces
+    its previous rows instead of appending duplicates.
+    Returns (ok, message)."""
     ws = _get_worksheet()
     if ws is None:
         return False, "Google Sheets isn't connected. See setup notes."
 
-    session_id = str(uuid.uuid4())[:8]
+    session_id = st.session_state.session_id
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     rows = []
 
@@ -127,8 +129,19 @@ def save_session_to_sheet(session_name, players):
         ])
 
     try:
+        # Drop any rows already written for this session, bottom-up so
+        # the row indices stay valid as we delete.
+        existing = ws.get_all_values()
+        stale = [
+            i for i, row in enumerate(existing[1:], start=2)
+            if row and row[0] == session_id
+        ]
+        for idx in reversed(stale):
+            ws.delete_rows(idx)
+
         ws.append_rows(rows, value_input_option="USER_ENTERED")
-        return True, f"Saved {len(rows)} players to the sheet."
+        verb = "Updated" if stale else "Saved"
+        return True, f"{verb} {len(rows)} players in the sheet."
     except Exception as e:
         return False, f"Write failed: {e}"
 
@@ -144,6 +157,35 @@ def load_history():
         return []
 
 
+def list_sessions():
+    """Returns [(session_id, label)] newest first, for the fix-up picker."""
+    rows = load_history()
+    seen = {}
+    for r in rows:
+        sid = r.get("session_id")
+        if sid and sid not in seen:
+            seen[sid] = f"{r.get('session_name') or 'Untitled'} — {r.get('date')}"
+    return list(reversed(list(seen.items())))
+
+
+def delete_session(session_id):
+    """Removes every row belonging to one session. Returns (ok, message)."""
+    ws = _get_worksheet()
+    if ws is None:
+        return False, "Google Sheets isn't connected."
+    try:
+        existing = ws.get_all_values()
+        stale = [
+            i for i, row in enumerate(existing[1:], start=2)
+            if row and row[0] == session_id
+        ]
+        for idx in reversed(stale):
+            ws.delete_rows(idx)
+        return True, f"Deleted {len(stale)} rows."
+    except Exception as e:
+        return False, f"Delete failed: {e}"
+
+
 # ============================================================
 # STATE
 # ============================================================
@@ -153,6 +195,9 @@ if "players" not in st.session_state:
 
 if "session_name" not in st.session_state:
     st.session_state.session_name = datetime.now().strftime("%d %b %Y")
+
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())[:8]
 
 
 def persist():
@@ -220,11 +265,48 @@ with st.sidebar:
 
     if st.button("Clear table", use_container_width=True):
         st.session_state.players = {}
+        st.session_state.session_id = str(uuid.uuid4())[:8]
         if os.path.exists(SAVE_FILE):
             os.remove(SAVE_FILE)
         st.rerun()
 
-    st.caption("Clearing wipes the current game. Save to the sheet first.")
+    st.caption("Clearing wipes the current game and starts a new session. "
+               "Save to the sheet first.")
+
+    if sheets_ready():
+        st.divider()
+        with st.expander("Fix a saved session"):
+            sessions = list_sessions()
+            if not sessions:
+                st.caption("Nothing saved yet.")
+            else:
+                labels = {label: sid for sid, label in sessions}
+                pick = st.selectbox("Saved session", list(labels.keys()))
+                target = labels[pick]
+
+                st.caption(
+                    "Overwrite replaces that session's rows with the table "
+                    "you have open right now."
+                )
+
+                if st.button("Overwrite with current table",
+                             use_container_width=True):
+                    if not st.session_state.players:
+                        st.error("No players on the table.")
+                    else:
+                        st.session_state.session_id = target
+                        ok, msg = save_session_to_sheet(
+                            st.session_state.session_name,
+                            st.session_state.players,
+                        )
+                        _get_worksheet.clear()
+                        st.success(msg) if ok else st.error(msg)
+
+                if st.button("Delete this session", use_container_width=True):
+                    ok, msg = delete_session(target)
+                    _get_worksheet.clear()
+                    st.success(msg) if ok else st.error(msg)
+                    st.rerun()
 
 
 st.title("Boys Poker Sesh")

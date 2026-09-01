@@ -1,2 +1,2 @@
 # Poker-Tracker
-Track buy-ins and know who owes who
+Track games and analytics

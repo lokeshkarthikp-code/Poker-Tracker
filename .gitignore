@@ -1,0 +1,7 @@
+.streamlit/secrets.toml
+client_secret.json
+poker_state.json
+__pycache__/
+*.pyc
+.venv/
+.DS_Store

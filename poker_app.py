@@ -280,7 +280,10 @@ with st.sidebar:
             ok, msg = save_session_to_sheet(
                 st.session_state.session_name, st.session_state.players
             )
-            st.success(msg) if ok else st.error(msg)
+            if ok:
+                st.success(msg)
+            else:
+                st.error(msg)
 
     if st.button("Clear table", use_container_width=True):
         st.session_state.players = {}
@@ -319,12 +322,18 @@ with st.sidebar:
                             st.session_state.players,
                         )
                         _get_worksheet.clear()
-                        st.success(msg) if ok else st.error(msg)
+                        if ok:
+                            st.success(msg)
+                        else:
+                            st.error(msg)
 
                 if st.button("Delete this session", use_container_width=True):
                     ok, msg = delete_session(target)
                     _get_worksheet.clear()
-                    st.success(msg) if ok else st.error(msg)
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
                     st.rerun()
 
 

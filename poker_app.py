@@ -440,12 +440,12 @@ text-align:center;font-size:12px;line-height:1.35;}}
                             st.rerun()
 
                     b1, b2, b3 = st.columns(3)
-                    if b1.button("+500", key=f"b500_{p}"):
-                        data["buyins"].append(500); persist(); st.rerun()
-                    if b2.button("+1000", key=f"b1k_{p}"):
-                        data["buyins"].append(1000); persist(); st.rerun()
-                    if b3.button("+2000", key=f"b2k_{p}"):
+                    if b1.button("+2000", key=f"b2k_{p}"):
                         data["buyins"].append(2000); persist(); st.rerun()
+                    if b2.button("+5000", key=f"b5k_{p}"):
+                        data["buyins"].append(5000); persist(); st.rerun()
+                    if b3.button("+10000", key=f"b10k_{p}"):
+                        data["buyins"].append(10000); persist(); st.rerun()
 
                     cc1, cc2 = st.columns([2, 1])
                     custom = cc1.number_input(

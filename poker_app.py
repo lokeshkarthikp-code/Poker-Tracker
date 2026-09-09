@@ -22,6 +22,18 @@ SHEET_HEADERS = [
     "buyin_total", "buyin_count", "final_chips", "net",
 ]
 
+# Same person, different names on the sheet. Key is what gets typed
+# (lowercased), value is the name history should show. Add more as needed.
+ALIASES = {
+    "lokesh": "Loki",
+}
+
+
+def canon(name):
+    """Maps a typed name to its canonical form for history aggregation."""
+    n = (name or "").strip()
+    return ALIASES.get(n.lower(), n)
+
 # ============================================================
 # STYLE
 # ============================================================
@@ -600,7 +612,7 @@ with tab_history:
         else:
             stats = {}
             for r in rows:
-                name = r.get("player")
+                name = canon(r.get("player"))
                 try:
                     net = float(r.get("net") or 0)
                 except ValueError:
@@ -663,8 +675,9 @@ with tab_history:
                     if r.get("session_id") not in chosen:
                         continue
                     try:
-                        combined[r.get("player")] = combined.get(
-                            r.get("player"), 0) + float(r.get("net") or 0)
+                        who = canon(r.get("player"))
+                        combined[who] = combined.get(who, 0) + float(
+                            r.get("net") or 0)
                     except ValueError:
                         continue
 

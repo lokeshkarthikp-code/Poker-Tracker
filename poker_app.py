@@ -758,8 +758,8 @@ with tab_analytics:
                 "Net per session",
                 "Leaderboard",
                 "ROI %",
-                "Win rate vs volume",
-                "Rebuy discipline",
+                "Win rate",
+                "Average rebuys",
                 "Head to head",
                 "Session volume",
                 "Biggest swings",
@@ -768,6 +768,8 @@ with tab_analytics:
             if chart == "Head to head":
                 who = f2.multiselect("Players (pick 2)", everyone,
                                      default=everyone[:2], max_selections=2)
+            elif chart == "Net per session":
+                who = [f2.selectbox("Player", everyone)]
             elif chart in ("Leaderboard", "Session volume", "Biggest swings"):
                 who = everyone
                 f2.caption("Covers all players.")
@@ -790,10 +792,12 @@ with tab_analytics:
                     st.caption("Cumulative net across sessions, in order played.")
 
             elif chart == "Net per session":
-                piv = sub.pivot_table(index="n", columns="player",
-                                      values="net", aggfunc="sum").fillna(0)
-                st.bar_chart(piv)
-                st.caption("Result of each individual night.")
+                one = sub.sort_values("n")
+                series = one.set_index("session")["net"]
+                st.bar_chart(series, color="#d4af37")
+                up = int((one["net"] > 0).sum())
+                st.caption(f"{who[0]} — {up} up, {len(one) - up} down "
+                           f"across {len(one)} sessions.")
 
             elif chart == "Leaderboard":
                 agg = (sub.groupby("player")["net"].sum()
@@ -812,22 +816,23 @@ with tab_analytics:
                            "not volume. A big winner who buys in constantly "
                            "can still have a mediocre ROI.")
 
-            elif chart == "Win rate vs volume":
+            elif chart == "Win rate":
                 agg = sub.groupby("player").agg(
                     sessions=("net", "size"),
                     wins=("net", lambda s: int((s > 0).sum())))
-                agg["win_rate"] = (agg["wins"] / agg["sessions"] * 100).round(1)
-                st.scatter_chart(agg, x="sessions", y="win_rate")
-                st.caption("Right side = plays often. Top = wins often. "
-                           "A high rate on two sessions is noise, not skill.")
+                agg["Win rate %"] = (agg["wins"] / agg["sessions"] * 100).round(1)
+                agg.index = [f"{p} ({n})" for p, n in
+                             zip(agg.index, agg["sessions"])]
+                st.bar_chart(agg["Win rate %"].sort_values(),
+                             color="#d4af37", horizontal=True)
+                st.caption("Share of nights finishing up. Session count in "
+                           "brackets — a high rate on two nights means little.")
 
-            elif chart == "Rebuy discipline":
-                agg = sub.groupby("player").agg(
-                    avg_rebuys=("rebuys", "mean"), net=("net", "sum"))
-                agg["avg_rebuys"] = agg["avg_rebuys"].round(2)
-                st.scatter_chart(agg, x="avg_rebuys", y="net")
-                st.caption("Average buy-ins per night against lifetime net. "
-                           "A downward drift suggests chasing losses.")
+            elif chart == "Average rebuys":
+                agg = sub.groupby("player")["rebuys"].mean().round(2)
+                st.bar_chart(agg.sort_values(), color="#d4af37", horizontal=True)
+                st.caption("Average buy-ins per night. Higher means more "
+                           "rebuying — worth comparing against the leaderboard.")
 
             elif chart == "Session volume":
                 vol = (df.groupby(["n", "session"])["buyin"].sum()

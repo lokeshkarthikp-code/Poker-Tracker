@@ -248,6 +248,30 @@ def net_of(name):
     return d["chips"] - sum(d["buyins"])
 
 
+def settle(profits):
+    """Takes {player: net} and returns [(payer, payee, amount)]."""
+    winners = [[p, v] for p, v in profits.items() if v > 0]
+    losers = [[p, -v] for p, v in profits.items() if v < 0]
+    winners.sort(key=lambda x: x[1], reverse=True)
+    losers.sort(key=lambda x: x[1], reverse=True)
+
+    transfers = []
+    i = j = 0
+    while i < len(losers) and j < len(winners):
+        loser, owed = losers[i]
+        winner, due = winners[j]
+        amount = min(owed, due)
+        if amount > 0:
+            transfers.append((loser, winner, amount))
+        losers[i][1] -= amount
+        winners[j][1] -= amount
+        if losers[i][1] <= 0:
+            i += 1
+        if winners[j][1] <= 0:
+            j += 1
+    return transfers
+
+
 # ============================================================
 # SIDEBAR
 # ============================================================
@@ -412,18 +436,18 @@ text-align:center;font-size:12px;line-height:1.35;}}
     else:
         names = list(st.session_state.players.keys())
 
-        # Three players per row keeps the page short instead of one long column.
+        # Collapsed by default — click a name to open their controls.
         for row_start in range(0, len(names), 3):
             cols = st.columns(3)
             for col, p in zip(cols, names[row_start:row_start + 3]):
-                with col, st.container(border=True):
-                    data = st.session_state.players[p]
-                    total = sum(data["buyins"])
-
+                data = st.session_state.players[p]
+                total = sum(data["buyins"])
+                n = data.get("chips", 0) - total
+                mark = "" if data.get("seated", True) else " (out)"
+                label = f"{p}{mark} · in {CURRENCY}{total:,} · net {n:+,}"
+                with col, st.expander(label):
                     is_seated = data.get("seated", True)
-                    tag = "" if is_seated else "  ·  cashed out"
-                    head, seat, kick = st.columns([5, 2, 1])
-                    head.markdown(f"**{p}** · {CURRENCY}{total} in{tag}")
+                    seat, kick = st.columns([3, 1])
 
                     if seat.button("Sit out" if is_seated else "Sit in",
                                    key=f"seat_{p}",
@@ -554,26 +578,12 @@ border-top:1px solid #2a2a2a;margin:0 40px;}}
 </body></html>""", height=250)
 
         st.subheader("Who pays who")
-        winners = [[p, v] for p, v in profits.items() if v > 0]
-        losers = [[p, -v] for p, v in profits.items() if v < 0]
-        winners.sort(key=lambda x: x[1], reverse=True)
-        losers.sort(key=lambda x: x[1], reverse=True)
-
-        if not winners or not losers:
+        transfers = settle(profits)
+        if not transfers:
             st.info("Enter final chip counts to calculate settlements.")
         else:
-            i = j = 0
-            while i < len(losers) and j < len(winners):
-                loser, owed = losers[i]
-                winner, due = winners[j]
-                amount = min(owed, due)
-                st.write(f"**{loser}** pays **{winner}** — {CURRENCY}{amount:,}")
-                losers[i][1] -= amount
-                winners[j][1] -= amount
-                if losers[i][1] == 0:
-                    i += 1
-                if winners[j][1] == 0:
-                    j += 1
+            for payer, payee, amount in transfers:
+                st.write(f"**{payer}** pays **{payee}** — {CURRENCY}{amount:,}")
 
 
 # ============================================================
@@ -638,6 +648,41 @@ with tab_history:
 
             st.divider()
             st.dataframe(table, use_container_width=True, hide_index=True)
+            st.divider()
+            st.subheader("Settle across sessions")
+            st.caption("Pick any past nights and settle them as one.")
+
+            sessions = list_sessions()
+            labels = {label: sid for sid, label in sessions}
+            picked = st.multiselect("Sessions", list(labels.keys()))
+
+            if picked:
+                chosen = {labels[l] for l in picked}
+                combined = {}
+                for r in rows:
+                    if r.get("session_id") not in chosen:
+                        continue
+                    try:
+                        combined[r.get("player")] = combined.get(
+                            r.get("player"), 0) + float(r.get("net") or 0)
+                    except ValueError:
+                        continue
+
+                combined = {k: round(v) for k, v in combined.items() if round(v)}
+                if not combined:
+                    st.info("Everyone is square across those sessions.")
+                else:
+                    for payer, payee, amount in settle(combined):
+                        st.write(f"**{payer}** pays **{payee}** — "
+                                 f"{CURRENCY}{amount:,}")
+                    st.caption(
+                        "Net position: " + " · ".join(
+                            f"{k} {v:+,}" for k, v in
+                            sorted(combined.items(), key=lambda kv: -kv[1])
+                        )
+                    )
+
+            st.divider()
             st.bar_chart(
                 {r["Player"]: r["Lifetime net"] for r in table},
                 color="#d4af37",

@@ -375,7 +375,9 @@ with st.sidebar:
 
 st.title("Boys Poker Sesh")
 
-tab_game, tab_settle, tab_history = st.tabs(["Table", "Settlements", "History"])
+tab_game, tab_settle, tab_history, tab_analytics = st.tabs(
+    ["Table", "Settlements", "History", "Analytics"]
+)
 
 
 # ============================================================
@@ -701,3 +703,143 @@ with tab_history:
                 color="#d4af37",
             )
             st.caption(f"{len(rows)} player-sessions recorded.")
+
+
+# ============================================================
+# TAB 4 — ANALYTICS
+# ============================================================
+
+with tab_analytics:
+    if not sheets_ready():
+        st.info("Connect a Google Sheet to see analytics.")
+    else:
+        raw = load_history()
+        if not raw:
+            st.info("No saved sessions yet.")
+        else:
+            import pandas as pd
+
+            recs = []
+            for r in raw:
+                try:
+                    recs.append({
+                        "session_id": r.get("session_id"),
+                        "date": str(r.get("date") or ""),
+                        "session": r.get("session_name") or "Untitled",
+                        "player": canon(r.get("player")),
+                        "buyin": float(r.get("buyin_total") or 0),
+                        "rebuys": float(r.get("buyin_count") or 0),
+                        "chips": float(r.get("final_chips") or 0),
+                        "net": float(r.get("net") or 0),
+                    })
+                except (TypeError, ValueError):
+                    continue
+
+            df = pd.DataFrame(recs)
+            if df.empty:
+                st.info("No usable rows yet.")
+                st.stop()
+
+            # One row per player per session (aliases may collapse two rows).
+            df = df.groupby(
+                ["session_id", "date", "session", "player"], as_index=False
+            ).sum(numeric_only=True)
+            df = df.sort_values("date")
+
+            order = df.drop_duplicates("session_id")["session_id"].tolist()
+            idx = {sid: i for i, sid in enumerate(order)}
+            df["n"] = df["session_id"].map(idx)
+
+            everyone = sorted(df["player"].unique())
+
+            f1, f2 = st.columns([2, 3])
+            chart = f1.selectbox("Chart", [
+                "Bankroll curve",
+                "Net per session",
+                "Leaderboard",
+                "ROI %",
+                "Win rate vs volume",
+                "Rebuy discipline",
+                "Head to head",
+                "Session volume",
+                "Biggest swings",
+            ])
+
+            if chart == "Head to head":
+                who = f2.multiselect("Players (pick 2)", everyone,
+                                     default=everyone[:2], max_selections=2)
+            elif chart in ("Leaderboard", "Session volume", "Biggest swings"):
+                who = everyone
+                f2.caption("Covers all players.")
+            else:
+                who = f2.multiselect("Players", everyone, default=everyone)
+
+            sub = df[df["player"].isin(who)] if who else df.iloc[0:0]
+
+            if sub.empty:
+                st.info("Pick at least one player.")
+
+            elif chart in ("Bankroll curve", "Head to head"):
+                if chart == "Head to head" and len(who) != 2:
+                    st.info("Pick exactly two players.")
+                else:
+                    piv = (sub.pivot_table(index="n", columns="player",
+                                           values="net", aggfunc="sum")
+                              .reindex(range(len(order))).fillna(0).cumsum())
+                    st.line_chart(piv)
+                    st.caption("Cumulative net across sessions, in order played.")
+
+            elif chart == "Net per session":
+                piv = sub.pivot_table(index="n", columns="player",
+                                      values="net", aggfunc="sum").fillna(0)
+                st.bar_chart(piv)
+                st.caption("Result of each individual night.")
+
+            elif chart == "Leaderboard":
+                agg = (sub.groupby("player")["net"].sum()
+                          .sort_values(ascending=False))
+                st.bar_chart(agg, color="#d4af37", horizontal=True)
+                st.caption("Lifetime net across every recorded session.")
+
+            elif chart == "ROI %":
+                agg = sub.groupby("player").agg(
+                    net=("net", "sum"), staked=("buyin", "sum"))
+                agg = agg[agg["staked"] > 0]
+                agg["ROI %"] = (agg["net"] / agg["staked"] * 100).round(1)
+                st.bar_chart(agg["ROI %"].sort_values(ascending=False),
+                             color="#d4af37", horizontal=True)
+                st.caption("Net as a share of money put in — efficiency, "
+                           "not volume. A big winner who buys in constantly "
+                           "can still have a mediocre ROI.")
+
+            elif chart == "Win rate vs volume":
+                agg = sub.groupby("player").agg(
+                    sessions=("net", "size"),
+                    wins=("net", lambda s: int((s > 0).sum())))
+                agg["win_rate"] = (agg["wins"] / agg["sessions"] * 100).round(1)
+                st.scatter_chart(agg, x="sessions", y="win_rate")
+                st.caption("Right side = plays often. Top = wins often. "
+                           "A high rate on two sessions is noise, not skill.")
+
+            elif chart == "Rebuy discipline":
+                agg = sub.groupby("player").agg(
+                    avg_rebuys=("rebuys", "mean"), net=("net", "sum"))
+                agg["avg_rebuys"] = agg["avg_rebuys"].round(2)
+                st.scatter_chart(agg, x="avg_rebuys", y="net")
+                st.caption("Average buy-ins per night against lifetime net. "
+                           "A downward drift suggests chasing losses.")
+
+            elif chart == "Session volume":
+                vol = (df.groupby(["n", "session"])["buyin"].sum()
+                         .reset_index().set_index("session")["buyin"])
+                st.bar_chart(vol, color="#d4af37")
+                st.caption("Total money on the table each night.")
+
+            elif chart == "Biggest swings":
+                best = df.nlargest(5, "net")[["player", "session", "net"]]
+                worst = df.nsmallest(5, "net")[["player", "session", "net"]]
+                c1, c2 = st.columns(2)
+                c1.markdown("**Best nights**")
+                c1.dataframe(best, hide_index=True, use_container_width=True)
+                c2.markdown("**Worst nights**")
+                c2.dataframe(worst, hide_index=True, use_container_width=True)
